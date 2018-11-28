@@ -15,22 +15,32 @@
 #define ROTARY_2 D3
 #define ROTARY_BUTTON D4
 #define LED D7
+#define HEAT_OUTPUT A4
+#define COOL_OUTPUT A5
 
 #define MAGIC_NUMBER 2
 #define SHORT_PRESS 1
 #define LONG_PRESS -1
 
+enum Mode {
+  on_off, pid, pwm
+};
+
 double setpoint = 60.0;
 double currentTemp;
+Mode mode = on_off;
 bool settingsMode = false;
+bool isHeating = false;
+bool isCooling = false;
 
 // function declarations
 int setSetpoint(String newSetpoint);
 void saveValues();
 
 struct SavedState {
-  double setpoint;
   int magic_number;
+  double setpoint;
+  Mode mode;
 };
 
 // Initialize the LCD library - will write to pin TX
@@ -54,11 +64,15 @@ void setup() {
   initSensor(SENSOR_PIN);
   initRotaryEncoder();
   pinMode(LED, OUTPUT);
+  pinMode(HEAT_OUTPUT, OUTPUT);
+  pinMode(COOL_OUTPUT, OUTPUT);
 
   Particle.variable("temperature", currentTemp);
   Particle.variable("setpoint", setpoint);
+  // this doesn't work because it's an enum
+  Particle.variable("mode", mode);
   Particle.function("setpoint", setSetpoint);
-
+  Particle.function("mode", setMode);
 
   delay(3000);
   lcd.clear();
@@ -66,22 +80,70 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
+  processRotaryButton();
   updateTemp();
-  // Serial.println(currentTemp);
+  processControlState();
+  updateDisplay();
+}
+
+// TODO: better name?
+void processControlState() {
+  // TODO: good place for some polymorphism
+  const double hysteresis = 1.0;
+  switch(mode) {
+    case on_off:
+    default:
+      if (isHeating && currentTemp >= setpoint) {
+        // Serial.printlnf("%f is greater than %f", currentTemp, setpoint);
+        toggleHeat(false);
+      } 
+      if (isCooling && currentTemp <= setpoint) {
+        // Serial.printlnf("%f is less than %f", currentTemp, setpoint);
+        toggleCooling(false);
+      }
+      if (currentTemp < (setpoint - hysteresis)) {
+        // Serial.printlnf("%f is less than %f", currentTemp, (setpoint - hysteresis));
+        toggleHeat(true);
+      }
+      if (currentTemp > (setpoint + hysteresis)) {
+        // Serial.printlnf("%f is greater than %f", currentTemp, (setpoint + hysteresis));
+        toggleCooling(true);
+      }
+  }
+}
+
+void updateDisplay() {
   // probably change to %3f (drop decimal)
   if (!settingsMode) {
     lcd.line1(String::format("  Target: %4.1f F", setpoint));
     lcd.line2(String::format("  Actual: %4.1f F", currentTemp));
   }
-  processRotaryButton();
-  // delay(10);
+}
+
+void toggleHeat(bool newState) {
+  if (newState != isHeating) {
+    Serial.printlnf("toggling heat %s", newState ? "on" : "off");
+    isHeating = newState;
+    digitalWrite(HEAT_OUTPUT, isHeating);
+    // TODO: publish state
+  }
+}
+
+void toggleCooling(bool newState) {
+  if (newState != isCooling) {
+    Serial.printlnf("toggling cooling %s", newState ? "on" : "off");
+    isCooling = newState;
+    digitalWrite(COOL_OUTPUT, isCooling);
+    // TODO: publish state
+  }
 }
 
 void updateTemp() {
   static volatile unsigned long lastUpdate = 0;
-  if (millis() - lastUpdate > 5000) {
+  if (!settingsMode && (millis() - lastUpdate > 5000)) {
     digitalWrite(LED, HIGH);
-    Serial.println("updating temp...");
+    // Serial.println("updating temp...");
+    // TODO: ignore bad values
     currentTemp = getTemp();
     // TODO: publish
     lastUpdate = millis();
@@ -99,6 +161,26 @@ int _setSetpoint(double newSetpoint) {
     saveTimer.startFromISR();
   }
   return 1;
+}
+
+int setMode(String newMode) {
+  return _setMode(newMode.toInt());
+}
+
+int _setMode(int newMode) {
+  if (newMode != mode) {
+    mode = static_cast<Mode>(newMode);
+    saveTimer.startFromISR();
+  }
+  return 1;
+}
+
+String getModeString(Mode _mode) {
+  return (const char *[]) {
+    "On/Off",
+    "PID",
+    "PWM"
+  }[_mode];
 }
 
 void rotate() {
@@ -130,7 +212,8 @@ void processRotaryButton() {
       Serial.println("enter settings mode");
       settingsMode = true;
       lcd.clear();
-      lcd.line1("Settings:");
+      lcd.line1("Mode:");
+      lcd.line2(getModeString(mode));
     }
   }
 }
@@ -149,6 +232,7 @@ void initializeValues() {
   Serial.println(value.setpoint);
   if (value.magic_number == MAGIC_NUMBER) {
     setpoint = value.setpoint;
+    mode = value.mode;
     Serial.printlnf("using stored setpoint %f", setpoint);
     long elapsed = (long)millis() - start;
     Serial.printlnf("read values in %d ms", elapsed);
@@ -161,7 +245,7 @@ void initializeValues() {
 void saveValues() {
   long start = (long)millis();
   Serial.printlnf("Saving setpoint -  %f", setpoint);
-  SavedState state = { setpoint,  MAGIC_NUMBER };
+  SavedState state = { MAGIC_NUMBER, setpoint, mode };
   Serial.printlnf("Size: %d", sizeof(state));
   EEPROM.put(0, state);
   long elapsed = (long)millis() - start;
