@@ -37,6 +37,7 @@ bool isCooling = false;
 // function declarations
 int setSetpoint(String newSetpoint);
 void saveValues();
+void leaveSettingsMode();
 
 struct SavedState {
   int magic_number;
@@ -49,6 +50,7 @@ LCD lcd = LCD();
 RotaryEncoder rotary(ROTARY_1, ROTARY_2);
 ClickButton rotaryButton(ROTARY_BUTTON);
 Timer saveTimer(5000, saveValues, true);
+Timer settingsModeTimer(30000, leaveSettingsMode, true);
 
 // setup() runs once, when the device is first turned on.
 void setup() {
@@ -74,6 +76,7 @@ void setup() {
   Particle.variable("mode", mode);
   Particle.function("setpoint", setSetpoint);
   Particle.function("mode", setMode);
+  Particle.variable("settingsMode", settingsMode);
 
   delay(3000);
   lcd.clear();
@@ -214,6 +217,7 @@ void rotate() {
 
   if (settingsMode) {
     Serial.println("settings mode rotation");
+    settingsModeTimer.reset();
   } else {
     // TODO: it's questionable if I should be setting this from an ISR
     double newSetpoint = setpoint + rotation;
@@ -225,20 +229,31 @@ void processRotaryButton() {
   rotaryButton.Update();
   if (rotaryButton.clicks == SHORT_PRESS) {
     if (settingsMode) {
-      Serial.println("exit settings mode");
-      settingsMode = false;
-      lcd.clear();
+      leaveSettingsMode();
     }
   } else if (rotaryButton.clicks == LONG_PRESS) {
     // setEditMode(true);
+    Serial.println("BUTTON LONG_PRESS");
     if (!settingsMode) {
-      Serial.println("enter settings mode");
-      settingsMode = true;
-      lcd.clear();
-      lcd.line1("Mode:");
-      lcd.line2(getModeString(mode));
+      enterSettingsMode();
     }
   }
+}
+
+void enterSettingsMode() {
+  Serial.println("enter settings mode");
+  settingsMode = true;
+  lcd.clear();
+  lcd.line1("Mode:");
+  lcd.line2(getModeString(mode));
+  settingsModeTimer.reset();
+}
+
+void leaveSettingsMode() {
+  Serial.println("exit settings mode");
+  settingsMode = false;
+  settingsModeTimer.stop();
+  lcd.clear();
 }
 
 void initRotaryEncoder() {
