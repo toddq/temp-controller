@@ -9,6 +9,7 @@
 #include "TempSensor.h"
 #include "RotaryEncoder.h"
 #include "clickButton.h"
+#include "JsonParserGeneratorRK.h"
 
 #define SENSOR_PIN D0
 #define ROTARY_1 D2
@@ -84,6 +85,28 @@ void loop() {
   updateTemp();
   processControlState();
   updateDisplay();
+  publishState();
+}
+
+void publishState() {
+  static volatile unsigned long lastUpdate = 0;
+  if (millis() - lastUpdate > 5000) {
+    JsonWriterStatic<256> json;
+    {
+      JsonWriterAutoObject obj(&json);
+      json.setFloatPlaces(2);
+      json.insertKeyValue("temperature", currentTemp);
+      json.insertKeyValue("setpoint", setpoint);
+      json.insertKeyValue("mode", mode);
+      json.insertKeyValue("isHeating", isHeating);
+      json.insertKeyValue("isCooling", isCooling);
+    }
+    String values = json.getBuffer();
+
+    // Serial.printlnf("Publish: %s", values);
+    Particle.publish("values", values, PRIVATE);
+    lastUpdate = millis();
+  }
 }
 
 // TODO: better name?

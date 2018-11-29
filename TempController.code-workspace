@@ -10,6 +10,9 @@
     "folders": [
         {
             "path": "."
+        },
+        {
+            "path": "/Users/toddqu/Particle/projects/temp-controller"
         }
     ]
 }

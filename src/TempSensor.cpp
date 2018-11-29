@@ -9,14 +9,17 @@ void initSensor(uint16_t pin) {
 
 // the library iterates over addresses on the 1-wire bus
 double getTemp() {
+  static volatile double lastValue;
   if (sensor->read()) {
-    return sensor->fahrenheit();
+    lastValue = sensor->fahrenheit();
+    return lastValue;
   } else {
     if (sensor->searchDone()) {
       return getTemp();
     } else {
       Serial.print("Read failed");
       printDS18b20DebugInfo();
+      return lastValue;
     }
   }
 }
