@@ -17,7 +17,7 @@ double getTemp() {
     if (sensor->searchDone()) {
       return getTemp();
     } else {
-      Serial.print("Read failed");
+      Serial.print("Read failed ");
       printDS18b20DebugInfo();
       return lastValue;
     }
@@ -53,7 +53,7 @@ void printDS18b20DebugInfo() {
   // Print the raw sensor data
   uint8_t data[9];
   sensor->data(data);
-  Serial.printf(
+  Serial.printlnf(
     " data=%02X%02X%02X%02X%02X%02X%02X%02X%02X",
     data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]
   );
