@@ -31,8 +31,10 @@ double setpoint = 60.0;
 double currentTemp;
 Mode mode = on_off;
 bool settingsMode = false;
-bool isHeating = false;
-bool isCooling = false;
+int isHeating = FALSE;
+int isCooling = FALSE;
+bool heatingEnabled = true;
+bool coolingEnabled = true;
 
 // function declarations
 int setSetpoint(String newSetpoint);
@@ -43,6 +45,8 @@ struct SavedState {
   int magic_number;
   double setpoint;
   Mode mode;
+  bool heatingEnabled;
+  bool coolingEnabled;
 };
 
 // Initialize the LCD library - will write to pin TX
@@ -77,6 +81,11 @@ void setup() {
   Particle.function("setpoint", setSetpoint);
   Particle.function("mode", setMode);
   Particle.variable("settingsMode", settingsMode);
+  
+  Particle.variable("heatEnabled", heatingEnabled);
+  Particle.variable("coolEnabled", coolingEnabled);
+  Particle.function("heatEnabled", enableHeating);
+  Particle.function("coolEnabled", enableCooling);
 
   delay(3000);
   lcd.clear();
@@ -103,10 +112,19 @@ void publishState() {
       json.insertKeyValue("mode", mode);
       json.insertKeyValue("isHeating", isHeating);
       json.insertKeyValue("isCooling", isCooling);
+      json.insertKeyValue("heatEnabled", heatingEnabled);
+      json.insertKeyValue("coolEnabled", coolingEnabled);
     }
     String values = json.getBuffer();
+    // workaround for weird generator behavior
+    if (!values.endsWith("}")) {
+      Serial.print("Fixing json - ");
+      Serial.println(values);
+      values.remove(values.lastIndexOf("}")+1);
+    }
 
-    // Serial.printlnf("Publish: %s", values);
+    Serial.print("Publish: ");
+    Serial.println(values);
     Particle.publish("values", values, PRIVATE);
     lastUpdate = millis();
   }
@@ -147,20 +165,18 @@ void updateDisplay() {
 }
 
 void toggleHeat(bool newState) {
-  if (newState != isHeating) {
+  if (heatingEnabled && newState != isHeating) {
     Serial.printlnf("toggling heat %s", newState ? "on" : "off");
     isHeating = newState;
     digitalWrite(HEAT_OUTPUT, isHeating);
-    // TODO: publish state
   }
 }
 
 void toggleCooling(bool newState) {
-  if (newState != isCooling) {
+  if (coolingEnabled && newState != isCooling) {
     Serial.printlnf("toggling cooling %s", newState ? "on" : "off");
     isCooling = newState;
     digitalWrite(COOL_OUTPUT, isCooling);
-    // TODO: publish state
   }
 }
 
@@ -168,10 +184,7 @@ void updateTemp() {
   static volatile unsigned long lastUpdate = 0;
   if (!settingsMode && (millis() - lastUpdate > 5000)) {
     digitalWrite(LED, HIGH);
-    // Serial.println("updating temp...");
-    // TODO: ignore bad values
     currentTemp = getTemp();
-    // TODO: publish
     lastUpdate = millis();
     digitalWrite(LED, LOW);
   }
@@ -240,6 +253,34 @@ void processRotaryButton() {
   }
 }
 
+int enableHeating(String newState) {
+  bool _newState = newState.toLowerCase() == "true";
+  if (_newState != heatingEnabled) {
+    if (_newState == false) {
+      // make sure heat output is off if disabling
+      toggleHeat(false);
+    }
+    heatingEnabled = _newState;
+    Serial.printlnf("Enable heating: %d", heatingEnabled);
+    saveTimer.reset();
+  }
+  return 1;
+}
+
+int enableCooling(String newState) {
+  bool _newState = newState.toLowerCase() == "true";
+  if (_newState != coolingEnabled) {
+    if (_newState == false) {
+      // make sure cool output is off if disabling
+      toggleCooling(false);
+    }
+    coolingEnabled = _newState;
+    Serial.printlnf("Enable cooling: %d", coolingEnabled);
+    saveTimer.reset();
+  }
+  return 1;
+}
+
 void enterSettingsMode() {
   Serial.println("enter settings mode");
   settingsMode = true;
@@ -269,8 +310,11 @@ void initializeValues() {
   Serial.println(value.magic_number);
   Serial.println(value.setpoint);
   if (value.magic_number == MAGIC_NUMBER) {
+    // TODO: just make value the global state holder
     setpoint = value.setpoint;
     mode = value.mode;
+    heatingEnabled = value.heatingEnabled;
+    coolingEnabled = value.coolingEnabled;
     Serial.printlnf("using stored setpoint %f", setpoint);
     long elapsed = (long)millis() - start;
     Serial.printlnf("read values in %d ms", elapsed);
@@ -282,8 +326,8 @@ void initializeValues() {
 
 void saveValues() {
   long start = (long)millis();
-  Serial.printlnf("Saving setpoint -  %f", setpoint);
-  SavedState state = { MAGIC_NUMBER, setpoint, mode };
+  Serial.println("Saving values ");
+  SavedState state = { MAGIC_NUMBER, setpoint, mode, heatingEnabled, coolingEnabled};
   Serial.printlnf("Size: %d", sizeof(state));
   EEPROM.put(0, state);
   long elapsed = (long)millis() - start;
