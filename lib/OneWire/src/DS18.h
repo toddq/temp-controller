@@ -17,6 +17,8 @@ public:
 
   bool read();
   bool read(uint8_t addr[8]);
+  bool requestRead(uint8_t addr[8]);
+  bool readTemp();
   int16_t raw();
   float celsius();
   float fahrenheit();
@@ -28,9 +30,11 @@ public:
   bool crcError();
 
   void setConversionTime(uint16_t ms);
+  uint16_t getConversionTime();
 
 private:
   void init();
+  void convertData();
 
   OneWire _wire;
   bool _parasitic;

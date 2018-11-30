@@ -42,6 +42,24 @@ bool DS18::read() {
 }
 
 bool DS18::read(uint8_t addr[8]) {
+  
+  if (!requestRead(addr)) {
+    return false;
+  };
+
+  // just wait a second while the conversion takes place
+  // different chips have different conversion times, check the specs, 1 sec is worse case + 250ms
+  // you could also communicate with other devices if you like but you would need
+  // to already know their address to select them.
+
+  delay(_conversionTime); // wait for conversion to finish
+
+  // we might do a _wire.depower() (parasite) here, but the reset will take care of it.
+
+  return readTemp();
+}
+
+bool DS18::requestRead(uint8_t addr[8]) {
   // Save the chip ROM information for later
   memcpy(_addr, addr, sizeof(_addr));
 
@@ -64,15 +82,10 @@ bool DS18::read(uint8_t addr[8]) {
   int power = _parasitic ? 1 : 0; // whether to leave parasite power on at the end of the conversion
   _wire.write(0x44, power);    // tell it to start a conversion
 
-  // just wait a second while the conversion takes place
-  // different chips have different conversion times, check the specs, 1 sec is worse case + 250ms
-  // you could also communicate with other devices if you like but you would need
-  // to already know their address to select them.
+  return true;
+}
 
-  delay(_conversionTime); // wait for conversion to finish
-
-  // we might do a _wire.depower() (parasite) here, but the reset will take care of it.
-
+bool DS18::readTemp() {
   // first make sure current values are in the scratch pad
 
   _wire.reset();
@@ -100,6 +113,13 @@ bool DS18::read(uint8_t addr[8]) {
     return false;
   }
 
+  convertData();
+
+  // Got a good reading!
+  return true;
+}
+
+void DS18::convertData() {
   // Convert the data to actual temperature
   // because the result is a 16 bit signed integer, it should
   // be stored to an "int16_t" type, which is always 16 bits
@@ -137,9 +157,6 @@ bool DS18::read(uint8_t addr[8]) {
         _celsius = (float)_data[2] + ((float)_data[1] * .03125);
       }
   }
-
-  // Got a good reading!
-  return true;
 }
 
 int16_t DS18::raw() {
@@ -176,4 +193,8 @@ bool DS18::crcError() {
 
 void DS18::setConversionTime(uint16_t ms) {
   _conversionTime = ms;
+}
+
+uint16_t DS18::getConversionTime() {
+  return _conversionTime;
 }
