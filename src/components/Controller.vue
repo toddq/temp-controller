@@ -1,24 +1,77 @@
 <template>
-<div>
-  <h2>{{ device.name }} <span :class="{networkStatus: true, online: isConnected}">&nbsp;&nbsp;&nbsp;</span></h2>
-  <p>
-    <span style="color: red" v-if="isHeating">Heating</span>
-    <span style="color: blue" v-if="isCooling">Cooling</span>
-  </p>
-  <p>
-    <span>Temperature:</span>
-    <span>{{ this.temperature }}</span>
-  </p>
-  <p>
-    <span>Setpoint:</span>
-    <span>{{ this.setpoint }}</span>
-  </p>
-  <p>
-    <span>Mode:</span>
-    <span>{{ this.mode }}</span>
-  </p>
-  <button @click="editSetpoint">Change setpoint</button>
-  <button @click="shoutRainbows">Rainbows</button>
+<div class="controller container">
+  <h2 class="title">
+    {{ device.name }} 
+    <div :class="['statusIndicator', {online: isConnected, offline: !isConnected}]"></div>
+  </h2>
+  <div class="box">
+
+    <div class="columns outputContainer">
+      <div @click="toggleHeating" :class="['column', 'is-narrow', 'field', 'is-horizontal', 'heatingContainer', {disabled: !heatEnabled}]">
+        <div class="field-label">
+          <label class="label">Heating</label>
+        </div>
+        <div class="field-body">
+          <div :class="['statusIndicator', {isHeating: isHeating}]"></div>
+        </div>
+      </div>
+      <div @click="toggleCooling" :class="['column', 'is-narrow', 'field', 'is-horizontal', 'coolingContainer', {disabled: !coolEnabled}]" >
+        <div class="field-label">
+          <label class="label">Cooling</label>
+        </div>
+        <div class="field-body">
+          <div :class="['statusIndicator', {isCooling: isCooling}]"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns">
+      <div class="column is-narrow field is-horizontal">
+        <!-- TODO: pull this out into a component -->
+        <div class="field-label is-normal">
+          <label class="label">Control mode:</label>
+        </div>
+        <div class="field-body">
+          <div class="select">
+            <select>
+              <option value="0">On / Off</option>
+              <option value="1">PID</option>
+              <option value="2">PWM</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns targetContainer">
+      <div class="column is-narrow field is-horizontal">
+        <div class="field-label is-normal">
+          <label class="label">Target</label>
+        </div>
+        <div class="field-body">
+          <div class="control has-icons-right">
+            <input class="input has-text-right" v-model.lazy="setpoint" @focus="$event.target.select()" @keyup.enter="setSetpoint"> 
+            <span class="icon is-right has-text-grey-dark">&deg;F</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns tempContainer">
+      <div class="column is-narrow field is-horizontal level">
+        <div class="field-label is-normal level-item">
+          <label class="label">Actual</label>
+        </div>
+        <div class="field-body level-item">
+          <span class="is-size-2 has-text-weight-bold">{{ this.temperature | round(1) }}&deg;</span>
+          <span class="is-size-4 f">F</span>
+        </div>
+      </div>
+    </div>
+
+    
+    <button class="button" @click="shoutRainbows">Rainbows</button>
+  </div>
 </div>
 </template>
 
@@ -37,7 +90,9 @@ export default {
       setpoint: null,
       mode: null,
       isHeating: false,
-        isCooling: false
+      isCooling: false,
+      heatEnabled: false,
+      coolEnabled: false
     }
   },
   mounted () {
@@ -77,6 +132,8 @@ export default {
       this.getVariable('temperature')
       this.getVariable('setpoint')
       this.getVariable('mode')
+      this.getVariable('heatEnabled')
+      this.getVariable('coolEnabled')
     },
     getDeviceInfo () {
       this.particle.getDevice({deviceId: this.deviceId, auth: this.authToken})
@@ -94,17 +151,37 @@ export default {
           console.error(`error getting variable '${name}': ${err}`)
         })
     },
-    editSetpoint () {
-      let newSetpoint = window.prompt('Enter new setpoint value:', this.setpoint)
-      if (newSetpoint  != null) {
-        this.setSetpoint(newSetpoint)
+    setSetpoint (event) {
+      // ensure the value is a number, but the api requires it to be wrapped in a string
+      if (isNaN(this.setpoint)) {
+        console.warn(this.setpoint, 'is not a number')
+        return
       }
-    },
-    setSetpoint (value) {
-      this.particle.callFunction({deviceId: this.deviceId, name: 'setpoint', argument: value, auth: this.authToken})
+      console.debug('updating setpoint with ', this.setpoint)
+      this.cloudFunction('setpoint', this.setpoint)
         .then(() => {
           this.getVariable('setpoint')
         })
+      event.target.blur()
+    },
+    toggleHeating () {
+      console.debug('toggle heating')
+      // this.heatEnabled = !this.heatEnabled
+      this.cloudFunction('heatEnabled', `${!this.heatEnabled}`)
+        .then(() => {
+          this.getVariable('heatEnabled')
+        })
+    },
+    toggleCooling () {
+      console.debug('toggle cooling')
+      // this.coolEnabled = !this.coolEnabled
+      this.cloudFunction('coolEnabled', `${!this.coolEnabled}`)
+        .then(() => {
+          this.getVariable('coolEnabled')
+        })
+    },
+    cloudFunction (name, argument) {
+      return this.particle.callFunction({deviceId: this.deviceId, name: name, argument: argument, auth: this.authToken})
     },
     shoutRainbows () {
       this.particle.signalDevice({deviceId: this.deviceId, signal: true, auth: this.authToken})
@@ -116,16 +193,88 @@ export default {
 }
 </script>
 
-<style scoped>
-.networkStatus {
-  font-size: .5em;
-  vertical-align: middle;
+<style scoped lang="scss">
+
+$offlineColor: #ff0000;
+$onlineColor: #08b508;
+$heatingColor: #ff0000;
+$coolingColor: #0000ff;
+$disabledColor: #aaaaaa;
+
+.controller {
+  margin-top: 20px;
+}
+
+.statusIndicator {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 1px solid gray;
+  border-radius: 50%;
+
+  &.online {
+    background-color: $onlineColor;
+    border-color: $onlineColor;
+  }
+
+  &.offline {
+    background-color: $offlineColor;
+    border-color: $offlineColor;
+  }
+}
+
+.heatingContainer, .heatingContainer label,
+.coolingContainer, .coolingContainer label {
+  cursor: pointer; 
+}
+
+.outputContainer {
+  .field-label {
+    margin-right: 1em;
+  }
+
+  .disabled {
+    text-decoration: line-through;
+
+    .label {
+      color: $disabledColor;
+    }
+
+    .statusIndicator {
+      background-color: $disabledColor;
+    }
+  }
+}
+
+
+.statusIndicator.isHeating {
   background-color: red;
+  border-color: red;
 }
-.networkStatus.online {
-  background-color: green;
+
+.statusIndicator.isCooling {
+  background-color: blue;
+  border-color: blue;
 }
-.networkStatus.offline {
-  background-color: red;
+
+.targetContainer input {
+  width: 100px;
 }
+
+.targetContainer input:not(:focus) {
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.tempContainer .f {
+  position: relative;
+  top: 6px;
+  padding-left: 5px;
+}
+
+.label {
+  white-space: nowrap;
+}
+
 </style>

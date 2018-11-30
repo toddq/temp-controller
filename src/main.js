@@ -2,6 +2,8 @@ import Vue from 'vue'
 import App from './App.vue'
 import Particle from 'particle-api-js'
 
+require('./assets/main.scss')
+
 Vue.config.productionTip = false
 
 // NOTE: anti-best-practice
@@ -31,6 +33,19 @@ function login () {
   }
 }
 login()
+
+Vue.filter('round', function(value, decimals) {
+  if(!value) {
+    value = 0
+  }
+
+  if(!decimals) {
+    decimals = 0
+  }
+
+  value = value.toFixed(decimals)
+  return value
+})
 
 new Vue({
   render: h => h(App),
