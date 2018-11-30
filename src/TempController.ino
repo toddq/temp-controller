@@ -23,11 +23,16 @@
 #define SHORT_PRESS 1
 #define LONG_PRESS -1
 
+#define SENSOR_READ_INTERVAL 5000
+#define PUBLISH_INTERVAL 5000
+#define COMPRESSOR_DELAY 180000
+
 enum Mode {
   on_off, pid, pwm
 };
 
 double setpoint = 60.0;
+int percentPower = 100;
 double currentTemp;
 Mode mode = on_off;
 bool settingsMode = false;
@@ -51,6 +56,7 @@ struct SavedState {
 
 // Initialize the LCD library - will write to pin TX
 LCD lcd = LCD();
+Sensor sensor(SENSOR_PIN);
 RotaryEncoder rotary(ROTARY_1, ROTARY_2);
 ClickButton rotaryButton(ROTARY_BUTTON);
 Timer saveTimer(5000, saveValues, true);
@@ -58,7 +64,7 @@ Timer settingsModeTimer(30000, leaveSettingsMode, true);
 
 // setup() runs once, when the device is first turned on.
 void setup() {
-  // delay(2000);
+  delay(2000);
   Time.zone(-8);
   Particle.syncTime();
   Serial.println("Starting up...");
@@ -67,28 +73,26 @@ void setup() {
   lcd.line1("Starting up...");
 
   initializeValues();
-  // TODO: make sensor an object
-  initSensor(SENSOR_PIN);
+  sensor.init();
   initRotaryEncoder();
+
   pinMode(LED, OUTPUT);
   pinMode(HEAT_OUTPUT, OUTPUT);
   pinMode(COOL_OUTPUT, OUTPUT);
 
+  // TODO: this doesn't work because it's an enum
+  Particle.variable("mode", mode);
   Particle.variable("temperature", currentTemp);
   Particle.variable("setpoint", setpoint);
-  // this doesn't work because it's an enum
-  Particle.variable("mode", mode);
-  Particle.function("setpoint", setSetpoint);
-  Particle.function("mode", setMode);
-  Particle.variable("settingsMode", settingsMode);
-  
   Particle.variable("heatEnabled", heatingEnabled);
   Particle.variable("coolEnabled", coolingEnabled);
+  
+  Particle.function("setpoint", setSetpoint);
+  Particle.function("mode", setMode);
   Particle.function("heatEnabled", enableHeating);
   Particle.function("coolEnabled", enableCooling);
 
   delay(3000);
-  lcd.clear();
 }
 
 // loop() runs over and over again, as quickly as it can execute.
@@ -102,7 +106,8 @@ void loop() {
 
 void publishState() {
   static volatile unsigned long lastUpdate = 0;
-  if (millis() - lastUpdate > 5000) {
+  unsigned long now = millis();
+  if (now - lastUpdate > PUBLISH_INTERVAL) {
     JsonWriterStatic<256> json;
     {
       JsonWriterAutoObject obj(&json);
@@ -118,15 +123,15 @@ void publishState() {
     String values = json.getBuffer();
     // workaround for weird generator behavior
     if (!values.endsWith("}")) {
-      Serial.print("Fixing json - ");
-      Serial.println(values);
+      // Serial.print("Fixing json - ");
+      // Serial.println(values);
       values.remove(values.lastIndexOf("}")+1);
     }
 
-    Serial.print("Publish: ");
-    Serial.println(values);
+    // Serial.print("Publish: ");
+    // Serial.println(values);
     Particle.publish("values", values, PRIVATE);
-    lastUpdate = millis();
+    lastUpdate = now;
   }
 }
 
@@ -159,7 +164,11 @@ void processControlState() {
 void updateDisplay() {
   // probably change to %3f (drop decimal)
   if (!settingsMode) {
-    lcd.line1(String::format("  Target: %4.1f F", setpoint));
+    if (mode == pwm) {
+      lcd.line1(String::format("       %3f%%", setpoint));
+    } else {
+      lcd.line1(String::format("  Target: %4.1f F", setpoint));
+    }
     lcd.line2(String::format("  Actual: %4.1f F", currentTemp));
   }
 }
@@ -173,20 +182,33 @@ void toggleHeat(bool newState) {
 }
 
 void toggleCooling(bool newState) {
+  static volatile unsigned long lastCoolingCycle = 0;
+  unsigned long now = millis();
   if (coolingEnabled && newState != isCooling) {
+    // for compressor protection
+    if (newState && (now - lastCoolingCycle < COMPRESSOR_DELAY)) {
+      // Serial.println("compressor protection");
+      return;
+    }
     Serial.printlnf("toggling cooling %s", newState ? "on" : "off");
     isCooling = newState;
     digitalWrite(COOL_OUTPUT, isCooling);
+    lastCoolingCycle = now;
   }
 }
 
 void updateTemp() {
   static volatile unsigned long lastUpdate = 0;
-  if (!settingsMode && (millis() - lastUpdate > 5000)) {
-    digitalWrite(LED, HIGH);
-    currentTemp = getTemp();
-    lastUpdate = millis();
-    digitalWrite(LED, LOW);
+  static volatile unsigned long readStarted = 0;
+
+  unsigned long now = millis();
+  if (!readStarted && (now - lastUpdate) > SENSOR_READ_INTERVAL) {
+    sensor.requestRead();
+    readStarted = now;
+  } else if (readStarted && (now - readStarted) > sensor.getReadTime()) {
+    currentTemp = sensor.getTemp();
+    lastUpdate = now;
+    readStarted = 0;
   }
 }
 
@@ -303,7 +325,7 @@ void initRotaryEncoder() {
 }
 
 void initializeValues() {
-  long start = (long)millis();
+  unsigned long start = micros();
   Serial.println("initializing values");
   SavedState value;
   EEPROM.get(0, value);
@@ -316,8 +338,8 @@ void initializeValues() {
     heatingEnabled = value.heatingEnabled;
     coolingEnabled = value.coolingEnabled;
     Serial.printlnf("using stored setpoint %f", setpoint);
-    long elapsed = (long)millis() - start;
-    Serial.printlnf("read values in %d ms", elapsed);
+    unsigned long elapsed = micros() - start;
+    Serial.printlnf("read values in %d microseconds", elapsed);
   } else {
     Serial.println("using default value");
     saveValues();
@@ -325,11 +347,11 @@ void initializeValues() {
 }
 
 void saveValues() {
-  long start = (long)millis();
+  unsigned long start = micros();
   Serial.println("Saving values ");
   SavedState state = { MAGIC_NUMBER, setpoint, mode, heatingEnabled, coolingEnabled};
   Serial.printlnf("Size: %d", sizeof(state));
   EEPROM.put(0, state);
-  long elapsed = (long)millis() - start;
-  Serial.printlnf("wrote values in %d ms", elapsed);
+  unsigned long elapsed = micros() - start;
+  Serial.printlnf("wrote values in %d microseconds", elapsed);
 }
