@@ -20,23 +20,24 @@
 #define HEAT_OUTPUT A4
 #define COOL_OUTPUT A5
 
-#define MAGIC_NUMBER 2
-#define SHORT_PRESS 1
-#define LONG_PRESS -1
+const int MAGIC_NUMBER = 2;
+const int SHORT_PRESS = 1;
+const int LONG_PRESS = -1;
 
-#define SENSOR_READ_INTERVAL 5000
-#define PUBLISH_INTERVAL 5000
-#define COMPRESSOR_DELAY 180000
-#define PWM_FREQUENCY 2000
+const int SENSOR_READ_INTERVAL = 5000;
+const int PUBLISH_INTERVAL = 5000;
+const int COMPRESSOR_DELAY = 180000;
+const int PWM_FREQUENCY = 2000;
 
-enum Mode {
-  on_off, pid, pwm
-};
+// modes.  was an enum, but they don't work with Particle.variable()
+const int on_off = 0;
+const int pid = 1;
+const int pwm = 2;
 
 double setpoint = 60.0;
 int percentPower = 100;
 double currentTemp;
-Mode mode = on_off;
+int mode = on_off;
 bool settingsMode = false;
 int isHeating = FALSE;
 int isCooling = FALSE;
@@ -51,7 +52,7 @@ void leaveSettingsMode();
 struct SavedState {
   int magic_number;
   double setpoint;
-  Mode mode;
+  int mode;
   bool heatingEnabled;
   bool coolingEnabled;
 };
@@ -84,8 +85,7 @@ void setup() {
   pinMode(COOL_OUTPUT, OUTPUT);
 
   Serial.println("Registring cloud variables");
-  // TODO: this doesn't work because it's an enum
-  // Particle.variable("mode", mode);
+  Particle.variable("mode", mode);
   Particle.variable("temperature", currentTemp);
   Particle.variable("setpoint", setpoint);
   Particle.variable("heatEnabled", heatingEnabled);
@@ -195,8 +195,9 @@ void toggleCooling(bool newState) {
   unsigned long now = millis();
   if (coolingEnabled && newState != isCooling) {
     // for compressor protection
-    if (newState && (now - lastCoolingCycle < COMPRESSOR_DELAY)) {
+    if (newState && lastCoolingCycle && (now - lastCoolingCycle < COMPRESSOR_DELAY)) {
       // Serial.println("compressor protection");
+      // Serial.printlnf("Now: %d, lastCool: %d, delay: %d", now, lastCoolingCycle, COMPRESSOR_DELAY);
       return;
     }
     Serial.printlnf("toggling cooling %s", newState ? "on" : "off");
@@ -243,13 +244,13 @@ int setMode(String newMode) {
 
 int _setMode(int newMode) {
   if (newMode != mode) {
-    mode = static_cast<Mode>(newMode);
+    mode = newMode;
     saveTimer.startFromISR();
   }
   return 1;
 }
 
-String getModeString(Mode _mode) {
+String getModeString(int _mode) {
   return (const char *[]) {
     "On/Off",
     "PID",
@@ -295,6 +296,8 @@ int enableHeating(String newState) {
       // make sure heat output is off if disabling
       toggleHeat(false);
     }
+    // TODO: pass this into pwm controller
+    // or... can I just change the pin mode?
     heatingEnabled = _newState;
     Serial.printlnf("Enable heating: %d", heatingEnabled);
     saveTimer.reset();
