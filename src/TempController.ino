@@ -7,6 +7,7 @@
 
 #include "LCD.h"
 #include "TempSensor.h"
+#include "PWM.h"
 #include "RotaryEncoder.h"
 #include "clickButton.h"
 #include "JsonParserGeneratorRK.h"
@@ -26,6 +27,7 @@
 #define SENSOR_READ_INTERVAL 5000
 #define PUBLISH_INTERVAL 5000
 #define COMPRESSOR_DELAY 180000
+#define PWM_FREQUENCY 2000
 
 enum Mode {
   on_off, pid, pwm
@@ -59,6 +61,7 @@ LCD lcd = LCD();
 Sensor sensor(SENSOR_PIN);
 RotaryEncoder rotary(ROTARY_1, ROTARY_2);
 ClickButton rotaryButton(ROTARY_BUTTON);
+PWMControl pwmController = PWMControl(HEAT_OUTPUT, PWM_FREQUENCY);
 Timer saveTimer(5000, saveValues, true);
 Timer settingsModeTimer(30000, leaveSettingsMode, true);
 
@@ -80,19 +83,22 @@ void setup() {
   pinMode(HEAT_OUTPUT, OUTPUT);
   pinMode(COOL_OUTPUT, OUTPUT);
 
+  Serial.println("Registring cloud variables");
   // TODO: this doesn't work because it's an enum
-  Particle.variable("mode", mode);
+  // Particle.variable("mode", mode);
   Particle.variable("temperature", currentTemp);
   Particle.variable("setpoint", setpoint);
   Particle.variable("heatEnabled", heatingEnabled);
   Particle.variable("coolEnabled", coolingEnabled);
   
+  Serial.println("Registring cloud functions");
   Particle.function("setpoint", setSetpoint);
   Particle.function("mode", setMode);
   Particle.function("heatEnabled", enableHeating);
   Particle.function("coolEnabled", enableCooling);
 
   delay(3000);
+  Serial.println("Ready to go!");
 }
 
 // loop() runs over and over again, as quickly as it can execute.
@@ -140,6 +146,9 @@ void processControlState() {
   // TODO: good place for some polymorphism
   const double hysteresis = 1.0;
   switch(mode) {
+    case pwm:
+      pwmController.process();
+      break;
     case on_off:
     default:
       if (isHeating && currentTemp >= setpoint) {
@@ -165,7 +174,7 @@ void updateDisplay() {
   // probably change to %3f (drop decimal)
   if (!settingsMode) {
     if (mode == pwm) {
-      lcd.line1(String::format("       %3f%%", setpoint));
+      lcd.line1(String::format("Power:      %3d%%", (int)setpoint));
     } else {
       lcd.line1(String::format("  Target: %4.1f F", setpoint));
     }
@@ -217,6 +226,10 @@ int setSetpoint(String newSetpoint) {
 }
 
 int _setSetpoint(double newSetpoint) {
+  if (mode == pwm) {
+    newSetpoint = constrain(newSetpoint, 0, 100);
+    pwmController.setDutyCycle(newSetpoint);
+  }
   if (newSetpoint != setpoint) {
     setpoint = newSetpoint;
     saveTimer.startFromISR();

@@ -1,6 +1,6 @@
 #include "TempSensor.h"
 
-Sensor::Sensor(uint16_t pin) {
+Sensor::Sensor(pin_t pin) {
   _pin = pin;
 }
 
