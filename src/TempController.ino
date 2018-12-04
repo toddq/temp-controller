@@ -5,6 +5,7 @@
  * Date:
  */
 
+#include "softap_pages.h"
 #include "LCD.h"
 #include "TempSensor.h"
 #include "PWM.h"
@@ -43,6 +44,8 @@ int isHeating = FALSE;
 int isCooling = FALSE;
 bool heatingEnabled = true;
 bool coolingEnabled = true;
+unsigned long lastSensorRead;
+bool wifiListeningMode = false;
 
 // function declarations
 int setSetpoint(String newSetpoint);
@@ -103,6 +106,7 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
+  processWifiChange();
   processRotaryButton();
   updateTemp();
   processControlState();
@@ -138,6 +142,28 @@ void publishState() {
     // Serial.println(values);
     Particle.publish("values", values, PRIVATE);
     lastUpdate = now;
+  }
+}
+
+void processWifiChange() {
+  // can restart or not
+  static const bool restartAfterWifiChange = true;
+  if (wifiListeningMode) {
+    Serial.println("WiFi configure completed");
+    wifiListeningMode = false;
+    settingsMode = false;
+    lcd.clear();
+    lcd.line1("New Wifi set");
+
+    if (restartAfterWifiChange) {
+      Serial.println("Restarting...");
+      lcd.line2("Restarting...");
+      delay(2000);
+      System.reset();
+    } else {
+      rotaryButton.Update();
+      delay(2000);
+    }
   }
 }
 
@@ -219,6 +245,10 @@ void updateTemp() {
     currentTemp = sensor.getTemp();
     lastUpdate = now;
     readStarted = 0;
+    // TODO: ask the sensor if the last read was a valid one
+    // if (sensor.valid()) {
+    //   lastSensorRead = now;
+    // }
   }
 }
 
@@ -251,6 +281,9 @@ int _setMode(int newMode) {
 }
 
 String getModeString(int _mode) {
+  if (_mode > 2) {
+    return "Err";
+  }
   return (const char *[]) {
     "On/Off",
     "PID",
@@ -276,6 +309,9 @@ void rotate() {
 
 void processRotaryButton() {
   rotaryButton.Update();
+  if (rotaryButton.clicks != 0) {
+    Serial.printlnf("clicks: %d", rotaryButton.clicks);
+  }
   if (rotaryButton.clicks == SHORT_PRESS) {
     if (settingsMode) {
       leaveSettingsMode();
@@ -283,10 +319,34 @@ void processRotaryButton() {
   } else if (rotaryButton.clicks == LONG_PRESS) {
     // setEditMode(true);
     Serial.println("BUTTON LONG_PRESS");
-    if (!settingsMode) {
+    if (settingsMode) {
+      // temporary, long press in settings mode
+      enterWifiSetupMode();
+    } else {
       enterSettingsMode();
     }
+  } else if (rotaryButton.clicks != 0) {
+    Serial.printlnf("clicks: %d", rotaryButton.clicks);
   }
+}
+
+void enterWifiSetupMode() {
+  if (wifiListeningMode) {
+    Serial.println("How'd I get here?");
+    Serial.println("Device is already listening.");
+    return;
+  }
+  String apPrefix = "Photon";
+  String apName = apPrefix + "-xxx";
+  System.set(SYSTEM_CONFIG_SOFTAP_PREFIX, apPrefix);
+  Serial.println("Access Point: " + apName);
+  lcd.clear();
+  lcd.line1("WiFi: " + apName);
+  lcd.line2("     192.168.0.1");
+  wifiListeningMode = true;
+  Serial.println("stopping settings mode timer");
+  settingsModeTimer.stop();
+  WiFi.listen();
 }
 
 int enableHeating(String newState) {
@@ -351,6 +411,9 @@ void initializeValues() {
     // TODO: just make value the global state holder
     setpoint = value.setpoint;
     mode = value.mode;
+    if (mode != on_off && mode != pwm && mode != pid) {
+      mode = on_off;
+    }
     heatingEnabled = value.heatingEnabled;
     coolingEnabled = value.coolingEnabled;
     Serial.printlnf("using stored setpoint %f", setpoint);
