@@ -68,6 +68,8 @@ ClickButton rotaryButton(ROTARY_BUTTON);
 PWMControl pwmController = PWMControl(HEAT_OUTPUT, PWM_FREQUENCY);
 Timer saveTimer(5000, saveValues, true);
 Timer settingsModeTimer(30000, leaveSettingsMode, true);
+// reset the system after 60 seconds if the application is unresponsive
+ApplicationWatchdog wd(60000, System.reset);
 
 // setup() runs once, when the device is first turned on.
 void setup() {
