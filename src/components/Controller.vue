@@ -7,7 +7,7 @@
   <div class="box">
 
     <div class="columns outputContainer">
-      <div @click="toggleHeating" :class="['column', 'is-narrow', 'field', 'is-horizontal', 'heatingContainer', {disabled: !heatEnabled}]">
+      <div @click="toggleHeating" :class="['column', 'is-2', 'field', 'is-horizontal', 'heatingContainer', {disabled: !heatEnabled}]">
         <div class="field-label">
           <label class="label">Heating</label>
         </div>
@@ -15,7 +15,7 @@
           <div :class="['statusIndicator', {isHeating: isHeating}]"></div>
         </div>
       </div>
-      <div @click="toggleCooling" :class="['column', 'is-narrow', 'field', 'is-horizontal', 'coolingContainer', {disabled: !coolEnabled}]" >
+      <div @click="toggleCooling" :class="['column', 'is-2', 'field', 'is-horizontal', 'coolingContainer', {disabled: !coolEnabled}]" >
         <div class="field-label">
           <label class="label">Cooling</label>
         </div>
@@ -26,11 +26,13 @@
     </div>
 
     <div class="columns">
-      <div class="column is-narrow field is-horizontal">
+      <div class="column is-2 field is-horizontal">
         <!-- TODO: pull this out into a component -->
-        <div class="field-label is-normal">
+        <div class="field-label is-normal has-text-left">
           <label class="label">Control mode:</label>
         </div>
+      </div>
+      <div class="column is-2">
         <div class="field-body">
           <div class="select">
             <select>
@@ -44,10 +46,12 @@
     </div>
 
     <div class="columns targetContainer">
-      <div class="column is-narrow field is-horizontal">
-        <div class="field-label is-normal">
+      <div class="column is-2 field is-horizontal">
+        <div class="field-label is-normal has-text-left">
           <label class="label">Target</label>
         </div>
+      </div>
+      <div class="column is-2">
         <div class="field-body">
           <div class="control has-icons-right">
             <input class="input has-text-right" v-model.lazy="setpoint" @focus="$event.target.select()" @keyup.enter="setSetpoint"> 
@@ -58,11 +62,13 @@
     </div>
 
     <div class="columns tempContainer">
-      <div class="column is-narrow field is-horizontal level">
-        <div class="field-label is-normal level-item">
+      <div class="column is-2 field is-horizontal level">
+        <div class="field-label is-normal is-narrow level-item has-text-left">
           <label class="label">Actual</label>
         </div>
-        <div class="field-body level-item">
+      </div>
+      <div class="column is-2">
+        <div class="field-body level-item has-text right">
           <span class="is-size-2 has-text-weight-bold">{{ this.temperature | round(1) }}&deg;</span>
           <span class="is-size-4 f">F</span>
         </div>
