@@ -25,5 +25,17 @@ yarn run test
 yarn run lint
 ```
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+<a href="https://imgur.com/LY85Am7.png">
+  <img src="https://imgur.com/LY85Am7.png" width="400px">
+</a>
+
+<a href="https://imgur.com/aLhwb9Z.png">
+  <img src="https://imgur.com/aLhwb9Z.png" width="400px">
+</a>
+
+### TODO:
+
+* Add Dockerfile
+* Add better mechanism for injecting auth
+* Add better mechanism for registering device
+* Display graphs from ThingSpeak data

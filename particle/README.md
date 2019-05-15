@@ -6,8 +6,8 @@ A Particle project named TempController
 
 Every new Particle project is composed of 3 important elements that you'll see have been created in your project directory for TempController.
 
-#### ```/src``` folder:  
-This is the source folder that contains the firmware files for your project. It should *not* be renamed. 
+#### ```/src``` folder:
+This is the source folder that contains the firmware files for your project. It should *not* be renamed.
 Anything that is in this folder when you compile your project will be sent to our compile service and compiled into a firmware binary for the Particle device that you have targeted.
 
 If your application contains multiple files, they should all be included in the `src` folder. If your firmware depends on Particle libraries, those dependencies are specified in the `project.properties` file referenced below.
@@ -15,7 +15,7 @@ If your application contains multiple files, they should all be included in the 
 #### ```.ino``` file:
 This file is the firmware that will run as the primary application on your Particle device. It contains a `setup()` and `loop()` function, and can be written in Wiring or C/C++. For more information about using the Particle firmware API to create firmware for your Particle device, refer to the [Firmware Reference](https://docs.particle.io/reference/firmware/) section of the Particle documentation.
 
-#### ```project.properties``` file:  
+#### ```project.properties``` file:
 This is the file that specifies the name and version number of the libraries that your project depends on. Dependencies are added automatically to your `project.properties` file when you add a library to a project using the `particle library add` command in the CLI or add a library in the Desktop IDE.
 
 ## Adding additional files to your project
@@ -33,3 +33,22 @@ When you're ready to compile your project, make sure you have the correct Partic
 - Everything in the `/src` folder, including your `.ino` application file
 - The `project.properties` file for your project
 - Any libraries stored under `lib/<libraryname>/src`
+
+
+
+<a href="https://imgur.com/fcbu6od.png">
+  <img src="https://imgur.com/fcbu6od.png" width="400px">
+</a>
+
+<a href="https://imgur.com/N6IvSwn.png">
+  <img src="https://imgur.com/N6IvSwn.png" width="400px">
+</a>
+
+
+## TODO:
+
+* Add a Fritzing diagram of example pin wiring and parts list
+* Add PID control option
+* Test with actual relays and 110v outputs
+* Design and fab a custom pcb to replace breadboard and nest of jumper wires
+* Design and print a custom 3d enclosure
