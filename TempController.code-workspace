@@ -1,0 +1,18 @@
+{
+    "settings": {
+        "extensions.ignoreRecommendations": true,
+        "C_Cpp.default.configurationProvider": "particle.particle-vscode-core",
+        "files.associations": {
+            "*.ino": "cpp"
+        },
+        "particle.targetDevice": "Photon"
+    },
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "path": "/Users/toddqu/Particle/projects/temp-controller"
+        }
+    ]
+}
